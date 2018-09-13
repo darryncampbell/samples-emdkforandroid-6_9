@@ -29,10 +29,14 @@ import com.symbol.emdk.barcode.StatusData.ScannerStates;
 import com.symbol.emdk.barcode.StatusData;
 
 import android.app.Activity;
+import android.hardware.display.DisplayManager;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.text.method.ScrollingMovementMethod;
 import android.util.DisplayMetrics;
+import android.view.Display;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.Surface;
@@ -57,6 +61,8 @@ public class MainActivity extends Activity implements EMDKListener, DataListener
     private EMDKManager emdkManager = null;
     private BarcodeManager barcodeManager = null;
     private Scanner scanner = null;
+    private boolean isBluetoothScanner = false;
+//    private PowerManager.WakeLock wakeLock = null;
 
     private boolean bContinuousMode = false;
 
@@ -187,6 +193,31 @@ public class MainActivity extends Activity implements EMDKListener, DataListener
         super.onPause();
         // The application is in background
 
+        if (!isBluetoothScanner) {
+            StopScanner();
+        }
+    }
+
+    @Override
+    protected void onStop()
+    {
+        super.onStop();
+        if (isBluetoothScanner) {
+            boolean screenOn = isScreenOn(this);
+            if (screenOn)
+            {
+                StopScanner();
+            }
+            else
+            {
+                //  Do nothing, application will continue to run in background connected to
+                //  Bluetooth scanner
+            }
+        }
+    }
+
+    private void StopScanner()
+    {
         // De-initialize scanner
         deInitScanner();
 
@@ -623,6 +654,15 @@ public class MainActivity extends Activity implements EMDKListener, DataListener
 
                 try {
                     scanner.enable();
+                    ScannerInfo scannerInfo = scanner.getScannerInfo();
+                    if (scannerInfo.getConnectionType() == ScannerInfo.ConnectionType.BLUETOOTH_SSI)
+                    {
+                        isBluetoothScanner = true;
+//                        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+//                        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "wlScannerExample");
+//                        if (!wakeLock.isHeld())
+//                            wakeLock.acquire();
+                    }
                 } catch (ScannerException e) {
 
                     textViewStatus.setText("Status: " + e.getMessage());
@@ -634,6 +674,12 @@ public class MainActivity extends Activity implements EMDKListener, DataListener
     }
 
     private void deInitScanner() {
+        isBluetoothScanner = false;
+//        if (wakeLock != null)
+//        {
+//            wakeLock.release();
+//            wakeLock = null;
+//        }
 
         if (scanner != null) {
 
@@ -776,5 +822,23 @@ public class MainActivity extends Activity implements EMDKListener, DataListener
             new AsyncStatusUpdate().execute(status);
         }
     }
+
+    private boolean isScreenOn(Context context) {
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            DisplayManager dm = (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
+            boolean screenOn = false;
+            for (Display display : dm.getDisplays()) {
+                if (display.getState() != Display.STATE_OFF) {
+                    screenOn = true;
+                }
+            }
+            return screenOn;
+        } else {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            //noinspection deprecation
+            return pm.isScreenOn();
+        }
+    }
+
 }
 
